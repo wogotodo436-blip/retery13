@@ -42,7 +42,12 @@ import {
 import { useTerms } from "./hooks/useTerms";
 import { ClusterData, Subtopic, DetailTopic } from "./data/archiveData";
 import { clusterDescriptions } from "./data/clusterDescriptions";
-import { motion, AnimatePresence, useDragControls } from "motion/react";
+import {
+  motion,
+  AnimatePresence,
+  useDragControls,
+  type PanInfo,
+} from "motion/react";
 import { DebugPanel, debugLog } from "./DebugPanel";
 
 import { getClusterTitleStyle, getSubtopicStyle } from "./utils/hierarchy";
@@ -410,6 +415,38 @@ export default function App() {
     });
   };
 
+  const [panelPositions, setPanelPositions] = useState<
+    Record<string, { x: number; y: number }>
+  >(() => {
+    const saved = localStorage.getItem("archive-panel-pos-v1");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        /* use defaults */
+      }
+    }
+    return {};
+  });
+
+  const getPanelPos = (panelId: string) =>
+    panelPositions[panelId] ?? { x: 0, y: 0 };
+
+  const commitPanelDrag = (
+    panelId: string,
+    offset: { x: number; y: number },
+  ) => {
+    setPanelPositions((prev) => {
+      const base = prev[panelId] ?? { x: 0, y: 0 };
+      const next = {
+        ...prev,
+        [panelId]: { x: base.x + offset.x, y: base.y + offset.y },
+      };
+      localStorage.setItem("archive-panel-pos-v1", JSON.stringify(next));
+      return next;
+    });
+  };
+
   const isPanelLocked = (panelId: string) =>
     panelLocks[panelId] === undefined ? true : panelLocks[panelId];
 
@@ -445,16 +482,31 @@ export default function App() {
         power: 0,
         timeConstant: 0,
       },
-      _dragConstraints: { top: 0, left: 0, right: 0, bottom: 0 },
-      style: isDraggable ? { cursor: "move" } : {},
+      style: isDraggable
+        ? { cursor: "move", pointerEvents: "auto" as const }
+        : {},
       transition: isDraggable ? { type: "tween", duration: 0 } : undefined,
       whileDrag: isDraggable ? { transition: { duration: 0 } } : undefined,
       onDragStart: () => setPanelDraggingId(panelId),
-      onDragEnd: () => setPanelDraggingId(null),
+      onDragEnd: (_event: unknown, info: PanInfo) => {
+        commitPanelDrag(panelId, info.offset);
+        setPanelDraggingId(null);
+      },
     };
   };
 
   const isPanelBeingDragged = (panelId: string) => panelDraggingId === panelId;
+
+  // Целевая позиция панели для motion `animate`: во время перетаскивания не
+  // навязываем x/y (ими управляет drag), в остальное время держим сохранённую
+  // позицию, чтобы панель оставалась там, куда её перетащили.
+  const getPanelAnimate = (panelId: string, scale: number) => {
+    if (isPanelBeingDragged(panelId)) {
+      return { opacity: 1, scale };
+    }
+    const pos = getPanelPos(panelId);
+    return { opacity: 1, x: pos.x, y: pos.y, scale };
+  };
 
   const renderPanelLock = (panelId: string) => {
     const isLocked = isPanelLocked(panelId);
@@ -2483,11 +2535,7 @@ export default function App() {
         {true && (
           <motion.div
             initial={{ opacity: 0, x: -20, scale: 0.6 }}
-            animate={
-              isPanelBeingDragged("tophud")
-                ? { opacity: 1, scale: 0.75 }
-                : { opacity: 1, x: 0, scale: 0.75 }
-            }
+            animate={getPanelAnimate("tophud", 0.75)}
             exit={{ opacity: 0, x: -20, scale: 0.6 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
             style={{
@@ -2707,11 +2755,7 @@ export default function App() {
           {!isDecryptorHidden && (
             <motion.div
               initial={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
-              animate={
-                isPanelBeingDragged("decryptor")
-                  ? { opacity: 1, scale: 0.7 }
-                  : { opacity: 1, x: 0, y: 0, scale: 0.7 }
-              }
+              animate={getPanelAnimate("decryptor", 0.7)}
               exit={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
               transition={{ duration: 0.3, ease: "easeOut" }}
               style={{
@@ -2914,11 +2958,7 @@ export default function App() {
           {isSettingsOpen && (
             <motion.div
               initial={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
-              animate={
-                isPanelBeingDragged("decryptor")
-                  ? { opacity: 1, scale: 0.7 }
-                  : { opacity: 1, x: 0, y: 0, scale: 0.7 }
-              }
+              animate={getPanelAnimate("parametris_efir", 0.7)}
               exit={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
               style={{
@@ -3075,11 +3115,7 @@ export default function App() {
           {isMapSettingsOpen && (
             <motion.div
               initial={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
-              animate={
-                isPanelBeingDragged("decryptor")
-                  ? { opacity: 1, scale: 0.7 }
-                  : { opacity: 1, x: 0, y: 0, scale: 0.7 }
-              }
+              animate={getPanelAnimate("map", 0.7)}
               exit={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
               style={{
@@ -3113,11 +3149,7 @@ export default function App() {
           {isSizeSettingsOpen && (
             <motion.div
               initial={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
-              animate={
-                isPanelBeingDragged("decryptor")
-                  ? { opacity: 1, scale: 0.7 }
-                  : { opacity: 1, x: 0, y: 0, scale: 0.7 }
-              }
+              animate={getPanelAnimate("size", 0.7)}
               exit={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
               style={{
@@ -3157,11 +3189,7 @@ export default function App() {
           {isSphereSizeQuickOpen && (
             <motion.div
               initial={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
-              animate={
-                isPanelBeingDragged("decryptor")
-                  ? { opacity: 1, scale: 0.7 }
-                  : { opacity: 1, x: 0, y: 0, scale: 0.7 }
-              }
+              animate={getPanelAnimate("spheresize", 0.7)}
               exit={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
               style={{
@@ -3409,11 +3437,7 @@ export default function App() {
           {isPerfSettingsOpen && (
             <motion.div
               initial={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
-              animate={
-                isPanelBeingDragged("decryptor")
-                  ? { opacity: 1, scale: 0.7 }
-                  : { opacity: 1, x: 0, y: 0, scale: 0.7 }
-              }
+              animate={getPanelAnimate("perf", 0.7)}
               exit={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
               style={{
@@ -3642,11 +3666,7 @@ export default function App() {
           {isMapSettingsOpen && (
             <motion.div
               initial={{ opacity: 0, x: 20, scale: 0.65 }}
-              animate={
-                isPanelBeingDragged("map")
-                  ? { opacity: 1, scale: 0.7 }
-                  : { opacity: 1, x: 0, scale: 0.7 }
-              }
+              animate={getPanelAnimate("map", 0.7)}
               exit={{ opacity: 0, x: 20, scale: 0.65 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
               style={{
@@ -3802,11 +3822,7 @@ export default function App() {
           {!isLegendHidden && (
             <motion.div
               initial={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
-              animate={
-                isPanelBeingDragged("decryptor")
-                  ? { opacity: 1, scale: 0.7 }
-                  : { opacity: 1, x: 0, y: 0, scale: 0.7 }
-              }
+              animate={getPanelAnimate("navigator", 0.7)}
               exit={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
               style={{
@@ -3906,11 +3922,7 @@ export default function App() {
           {!isCatalogHidden && (
             <motion.div
               initial={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
-              animate={
-                isPanelBeingDragged("catalog")
-                  ? { opacity: 1, scale: 0.7 }
-                  : { opacity: 1, x: 0, y: 0, scale: 0.7 }
-              }
+              animate={getPanelAnimate("catalog", 0.7)}
               exit={{ opacity: 0, x: 25, y: -25, scale: 0.65 }}
               transition={
                 getDragProps("catalog").drag
@@ -3931,7 +3943,10 @@ export default function App() {
                 timeConstant: 0,
               }}
               onDragStart={() => setPanelDraggingId("catalog")}
-              onDragEnd={() => setPanelDraggingId(null)}
+              onDragEnd={(_event, info) => {
+                commitPanelDrag("catalog", info.offset);
+                setPanelDraggingId(null);
+              }}
               whileDrag={{ transition: { duration: 0 } }}
               className={`hud-panel absolute bottom-[6px] left-0 w-64 max-h-[calc(100vh-80px)] overflow-visible flex flex-col bg-[#070716]/50 backdrop-blur-xl border border-white/5 rounded-xl shadow-[0_20px_45px_rgba(0,0,0,0.8)] z-40 ${isCatalogOpen ? "h-[320px]" : "h-[40px]"} pointer-events-auto ${getUnlockedPanelHighlight("catalog")} ${isPanelBeingDragged("catalog") ? "" : "transition-all duration-300"}`}
             >
