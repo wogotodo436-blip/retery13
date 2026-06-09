@@ -1,0 +1,7 @@
+renderPanelLock = (panelId: string) => {
+    if (!isPanelsUnlocked) return null;
+    const isLocked = panelLocks[panelId];
+    return (
+      <button 
+        onClick={(e) => { e.stopPropagation(); togglePanelLock(panelId); }}
+        className={`absolute -top-2 -right-2 p-1 rounded-full shadow-lg b

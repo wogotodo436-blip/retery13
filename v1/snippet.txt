@@ -1,0 +1,5 @@
+togglePanelLock = (panelId: string) => {
+    setPanelLocks(prev => ({ ...prev, [panelId]: !prev[panelId] }));
+  };
+
+  const getDragProps = (panelId: s
